@@ -2,16 +2,44 @@ import time
 import socket
 import base64
 import string
+import selectors
+from .protocolo import CDProto
 
 class Slave:
-        def __init__ ():
-                numSlaves = 0
-                tabela = string.ascii_uppercase + string.ascii_lowercase + string.digits
+        def __init__(self):
+                self.numSlaves = 0
+                self.proxPass = 0
+                self.tabela = string.ascii_uppercase + string.ascii_lowercase + string.digits
 
+                self._host = "localhost"
+                self._port = 5000
+                self.sel=selectors.DefaultSelector()
+                self.sock = socket.socket()     
+                self.sock.bind(('localhost', self._port))
+                self.sock.listen(100)
+                self.sel.register(self.sock, selectors.EVENT_READ, self.accept) #the socket is ready to read
 
-        def send_msg_slaver(cls, connection: socket):
-                self.numSlaves = self.numSlaves + 1
-                connection.send(self.numSlaves)
+        def accept(self,sock, mask):
+                conn, addr = self.sock.accept()  # Should be ready
+                conn.setblocking(False)
+                self.sel.register(conn, selectors.EVENT_READ, self.read)
+
+        def read(self,conn, mask):
+            data,ser = CDProto.recv_msg(conn)  #the server reads the message sent through the socket
+            if(data!=None):
+                comm=data['type']
+                if comm=="register":
+                        self.numSlaves = self.numSlaves + 1
+                        msg = CDProto.reply(self.numSlaves, self.proxPass)
+                        CDProto.send_msg(conn, msg)
+                elif comm=="reply":
+                        #funcao
+                        pass
+                elif comm=='correct':
+                        conn.close()
+                    
+                        
+        
 
         def send_msg_server(cls, connection: socket, username: str, password: str):
                 """Sends through a connection a Message object."""
