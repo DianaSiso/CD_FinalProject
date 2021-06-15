@@ -157,12 +157,22 @@ def recv_msg(cls, connection: socket):
                 message=connection.recv(head) #recebemos os bits correspondente á mensagem
                 data=message.decode(encoding='UTF-8')#descodificamos a mensagem 
                 
-                credentials = {'username' : , 'password': }
+                # credentials = {'username' : , 'password': }
                 return data  
             else:
                 return None
         except SocketError as e:
             return None  
+
+def __init__(self):
+        """Initialize broker."""
+    self._host = "localhost"
+    self._port = 5000
+    self.sel=selectors.DefaultSelector()
+    self.sock = socket.socket()     
+    self.sock.bind(('localhost', self._port))
+    self.sock.listen(100)
+    self.sel.register(self.sock, selectors.EVENT_READ, self.accept) #the socket is ready to read
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
