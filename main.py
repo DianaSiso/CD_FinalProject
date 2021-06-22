@@ -4,6 +4,7 @@ import secrets
 import string
 import socket
 from socket import error as SocketError
+import selectors
 import json
 import time
 import logging
@@ -165,7 +166,7 @@ def recv_msg(cls, connection: socket):
             return None  
 
 def __init__(self):
-        """Initialize broker."""
+    """Initialize broker."""
     self._host = "localhost"
     self._port = 5000
     self.sel=selectors.DefaultSelector()
