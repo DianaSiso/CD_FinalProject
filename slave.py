@@ -15,8 +15,8 @@ class Slave:
                 self._port = 5000
                 self.client=docker.DockerClient()
                 self.container=self.client.containers.get("magical_meitner")
-                self._id=self.container.attrs['NetworkSettings']['IPAddress']
-                print(self._id)
+                self._ip=self.container.attrs['NetworkSettings']['IPAddress']
+                print(self._ip)
                 self._notfound=True
                 #socket entre slaves
                 self.sel=selectors.DefaultSelector()
@@ -24,12 +24,12 @@ class Slave:
                 self.sock.bind(('', 5005)) #recebe de todos
                 self.sock.listen(100)
                 self.sel.register(self.sock, selectors.EVENT_READ, self.accept) #the socket is ready to read
-                msg = CDProto.register(self._id,self.numSlaves, self.proxPass)
+                msg = CDProto.register(self._ip,self.numSlaves, self.proxPass)
                 CDProto.send_msg(self.sock, msg)
                 #socket com main
                 while self._notfound:
                         self.dofunc()
-                        
+
         def dofunc(self):
                 #mandar o self.tabela[proxPass] para a main
                 #dps de receber mensagem
@@ -46,7 +46,7 @@ class Slave:
             if(data!=None):
                 comm=data['type']
                 if comm=="register":
-                        msg = CDProto.reply(self._id,self.numSlaves+1, self.proxPass)
+                        msg = CDProto.reply(self._ip,self.numSlaves+1, self.proxPass)
                         CDProto.send_msg(conn, msg)
                 elif comm=="reply":
                         #funcao
