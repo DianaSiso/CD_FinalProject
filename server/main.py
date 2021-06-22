@@ -1,5 +1,7 @@
 """ Impenetrable Server."""
 import socket
+from socket import error as SocketError
+import selectors
 import uvicorn
 import secrets
 import string
@@ -125,6 +127,53 @@ def read_current_user(password: str = Depends(authenticate)):
     return StreamingResponse(file_like)
 
 
+def run(self):
+    """Run until canceled."""
+    while not self.canceled:
+        events = self.sel.select()
+        for key, mask in events:
+            callback = key.data
+            callback(key.fileobj, mask)
+        pass
+        
+
+def accept(self,sock, mask):
+    conn, addr = self.sock.accept()  # Should be ready
+    conn.setblocking(False)
+    self.sel.register(conn, selectors.EVENT_READ, self.read)
+
+    
+
+def read(self,conn, mask):
+    msg = recv_msg(conn)
+    authenticate()
+
+       
+def recv_msg(cls, connection: socket):
+        """Receives through a connection a Message object."""
+        try:
+            header=connection.recv(2) #recevemos os 2 primeiros bits
+            head=int.from_bytes(header,byteorder='big') #contem o tamanho da mensagem 
+            if head!=0:
+                message=connection.recv(head) #recebemos os bits correspondente á mensagem
+                data=message.decode(encoding='UTF-8')#descodificamos a mensagem 
+                
+                # credentials = {'username' : , 'password': }
+                return data  
+            else:
+                return None
+        except SocketError as e:
+            return None  
+
+def __init__(self):
+    """Initialize broker."""
+    self._host = "localhost"
+    self._port = 5000
+    self.sel=selectors.DefaultSelector()
+    self.sock = socket.socket()     
+    self.sock.bind(('localhost', self._port))
+    self.sock.listen(100)
+    self.sel.register(self.sock, selectors.EVENT_READ, self.accept) #the socket is ready to read
 if __name__ == "__main__":
 
     logger.info("\t\t\t\tMy IP: %s", socket.gethostbyname(socket.gethostname()))

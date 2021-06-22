@@ -3,7 +3,6 @@ import socket
 import base64
 import string
 import selectors
-import docker
 from .protocolo import CDProto
 
 class Slave:
@@ -13,9 +12,7 @@ class Slave:
                 self.tabela = string.ascii_uppercase + string.ascii_lowercase + string.digits
                 self._host = "localhost"
                 self._port = 5000
-                self.client=docker.DockerClient()
-                self.container=self.client.containers.get("magical_meitner")
-                self._ip=self.container.attrs['NetworkSettings']['IPAddress']
+                #definir ip
                 print(self._ip)
                 self._notfound=True
                 #socket entre slaves
@@ -27,11 +24,19 @@ class Slave:
                 msg = CDProto.register(self._ip,self.numSlaves, self.proxPass)
                 CDProto.send_msg(self.sock, msg)
                 #socket com main
+                #self.sel2=selectors.DefaultSelector()
+                self.sock2 = socket.socket()     
+                self.sock2.bind(('127.0.1.1', 5000)) #recebe de todos
+                self.sock2.listen(100)
+                #self.sel2.register(self.sock2, selectors.EVENT_READ, self.accept2) #the socket is ready to read
+                # ip main 127.0.1.1
                 while self._notfound:
                         self.dofunc()
 
         def dofunc(self):
                 #mandar o self.tabela[proxPass] para a main
+                solved=self.read2(self.sock2)
+                #self.sel2.select()
                 #dps de receber mensagem
                 #if not ok, incrementar self.proxPass=self.proxPass+self.numSlaves
                 #else, enviar correct, self._notfounf=False e conn.close() 
@@ -40,22 +45,33 @@ class Slave:
                 conn, addr = self.sock.accept()  # Should be ready
                 conn.setblocking(False)
                 self.sel.register(conn, selectors.EVENT_READ, self.read)
+        def accept2(self,sock, mask):
+                conn, addr = self.sock.accept()  # Should be ready
+                conn.setblocking(False)
+                self.sel.register(conn, selectors.EVENT_READ, self.read2)
 
         def read(self,conn, mask):
-            data,ser = CDProto.recv_msg(conn)  #the server reads the message sent through the socket
-            if(data!=None):
-                comm=data['type']
-                if comm=="register":
-                        msg = CDProto.reply(self._ip,self.numSlaves+1, self.proxPass)
-                        CDProto.send_msg(conn, msg)
-                elif comm=="reply":
-                        #funcao
-                        pass
-                elif comm=='correct':
-                        self._notfound=False
-                        conn.close()
+                data = CDProto.recv_msg(conn)  #the server reads the message sent through the socket
+                if(data!=None):
+                        comm=data['type']
+                        if comm=="register":
+                                msg = CDProto.reply(self._ip,self.numSlaves+1, self.proxPass)
+                                CDProto.send_msg(conn, msg)
+                        elif comm=="reply":
+                                #funcao
+                                pass
+                        elif comm=='correct':
+                                self._notfound=False
+                                conn.close()
                     
-                        
+        def read2(self,conn,mask):
+                self.sock2.setblocking(True)
+                self.sock2.recv(1)
+                data = CDProto.recv_msg_server(conn)
+                if "OK" in data:
+                        return True      
+                return False
+                    
         
 
         def send_msg_server(cls, connection: socket, username: str, password: str):

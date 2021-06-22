@@ -1,5 +1,6 @@
 """Protocol for chat server - Computação Distribuida Assignment 1."""
 import json
+import time
 from socket import socket
 from socket import error as SocketError
 import errno
@@ -54,7 +55,43 @@ class CDProto:
     def password(cls, psw: str) -> CorrectMessage:
         return CorrectMessage(psw)
     
+    @classmethod
+    def recv_msg_server(cls,connection:socket) -> str:
+        timeout=2
+        #make socket non blocking
+        connection.setblocking(0)
     
+        #total data partwise in an array
+        total_data=[]
+        data=''
+    
+        #beginning time
+        begin=time.time()
+        while 1:
+            #if you got some data, then break after timeout
+            if total_data and time.time()-begin > timeout:
+                break
+        
+            #if you got no data at all, wait a little longer, twice the timeout
+            elif time.time()-begin > timeout*2:
+                break
+        
+            #recv something
+            try:
+                data = connection.recv(1024)
+                if data:
+                    total_data.append(data)
+                    #change the beginning time for measurement
+                    begin=time.time()
+                else:
+                    #sleep for sometime to indicate a gap
+                    time.sleep(0.1)
+            except:
+                pass
+    
+        #join all parts to make final string
+        return ''.join(total_data)
+
     @classmethod
     def send_msg(cls, connection: socket, msg: Message):
        data=msg.encode(encoding='UTF-8') #dar encode para bytes
