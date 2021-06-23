@@ -1,7 +1,5 @@
 """ Impenetrable Server."""
 import socket
-from socket import error as SocketError
-import selectors
 import uvicorn
 import secrets
 import string
@@ -10,7 +8,6 @@ import logging
 from logging.config import dictConfig
 import random
 from datetime import datetime, timedelta
-import struct
 
 from fastapi.responses import StreamingResponse
 
@@ -128,58 +125,7 @@ def read_current_user(password: str = Depends(authenticate)):
     return StreamingResponse(file_like)
 
 
-def run(self):
-    """Run until canceled."""
-    while not self.canceled:
-        events = self.sel.select()
-        for key, mask in events:
-            callback = key.data
-            callback(key.fileobj, mask)
-        pass
-        
-
-def accept(self,sock, mask):
-    conn, addr = self.sock.accept()  # Should be ready
-    conn.setblocking(False)
-    self.sel.register(conn, selectors.EVENT_READ, self.read)
-
-    
-
-def read(self,conn, mask):
-    msg = recv_msg(conn)
-    authenticate()
-
-       
-def recv_msg(cls, connection: socket):
-        """Receives through a connection a Message object."""
-        print("recebi uma msg ;)")
-        try:
-            header=connection.recv(2) #recevemos os 2 primeiros bits
-            head=int.from_bytes(header,byteorder='big') #contem o tamanho da mensagem 
-            if head!=0:
-                message=connection.recv(head) #recebemos os bits correspondente á mensagem
-                data=message.decode(encoding='UTF-8')#descodificamos a mensagem 
-                
-                # credentials = {'username' : , 'password': }
-                print(data)
-                return data  
-            else:
-                return None
-        except SocketError as e:
-            return None  
-
-def __init__(self):
-    """Initialize broker."""
-    sel=selectors.DefaultSelector()
-    #sock = socket.socket()     
-
-    MCAST_GRP = '224.1.1.1'
-    MCAST_PORT = 5000
-    self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-    self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 32)
-    self.sock.bind((MCAST_GRP, MCAST_PORT))
-    self.el.register(self.sock, selectors.EVENT_READ, accept) #the socket is ready to read
-
 if __name__ == "__main__":
+
     logger.info("\t\t\t\tMy IP: %s", socket.gethostbyname(socket.gethostname()))
     uvicorn.run(app, host="0.0.0.0", port=8000)

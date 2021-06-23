@@ -6,9 +6,7 @@ import selectors
 import json
 import time
 from socket import error as SocketError
-import logging
-from logging.config import dictConfig
-
+import random
 class Message:
     """Message Type."""
     def __init__(self, id, numSlaves, proxPass, type, psw = None):
@@ -47,12 +45,12 @@ class CDProto:
     """Computação Distribuida Protocol."""
 
     @classmethod
-    def register(cls, numSlaves: int, proxPass: int) -> RegisterMessage:
-        return RegisterMessage(numSlaves, proxPass)
+    def register(cls, id: int, numSlaves: int, proxPass: int) -> RegisterMessage:
+        return RegisterMessage(id, numSlaves, proxPass)
     
     @classmethod
-    def reply(cls, numSlaves: int, proxPass: int) -> ReplyMessage:
-        return ReplyMessage(numSlaves, proxPass)
+    def reply(cls, id: int, numSlaves: int, proxPass: int) -> ReplyMessage:
+        return ReplyMessage(id, numSlaves, proxPass)
 
 
     @classmethod
@@ -99,14 +97,16 @@ class CDProto:
 
     @classmethod
     def send_msg(cls, connection: socket, msg: Message):
-       data=msg.encode(encoding='UTF-8') #dar encode para bytes
+       print("enviei")
+       data=msg.__str__().encode(encoding='UTF-8') #dar encode para bytes
        mess=len(data).to_bytes(2,byteorder='big') #tamanho da mensagem em bytes
        mess+=data #mensagem final contendo o cabeçalho e a mensagem
-       connection.send(mess) #enviar mensagem final     
+       connection.sendto(mess, ('224.1.1.2', 5005))    
 
     @classmethod
     def recv_msg(cls, connection: socket) -> Message:
         """Receives through a connection a Message object."""
+        print("recebi")
         try:
             header=connection.recv(2) #recevemos os 2 primeiros bits
             head=int.from_bytes(header,byteorder='big') #contem o tamanho da mensagem 
@@ -126,28 +126,22 @@ class Slave:
                 self.numSlaves = 1
                 self.proxPass = 0
                 self.tabela = string.ascii_uppercase + string.ascii_lowercase + string.digits
-                self._host = "localhost"
-                self._port = 5000
                 #definir ip
                 self._notfound=True
                 #socket entre slaves
-                # self.sel=selectors.DefaultSelector()
-                # self.sock = socket.socket()     
-                # self.sock.bind(('224.1.1.2', 5005)) #recebe de todos
-                # self.sock.listen(100)
-                # self.sel.register(self.sock, selectors.EVENT_READ, self.accept) #the socket is ready to read
-                # #msg = CDProto.register(self._ip,self.numSlaves, self.proxPass)
-                #CDProto.send_msg(self.sock, msg)
+                self.sel=selectors.DefaultSelector()
+                
                 #socket com main
-                #self.sel2=selectors.DefaultSelector()
-                # self.sock2 = socket.socket()     
-                # self.sock2.bind(('127.0.1.1', 5000))
-                # self.sock2.listen(100)
-                #self.sel2.register(self.sock2, selectors.EVENT_READ, self.accept2) #the socket is ready to read
+                self.sel2=selectors.DefaultSelector()
+                self.sock2 = socket.socket()     
+                self.sock2.bind(('127.0.1.1', 8000))
+                self.sock2.listen(100)
+                self.sel2.register(self.sock2, selectors.EVENT_READ, self.accept2) #the socket is ready to read
                 # ip main 127.0.1.1
 
                 MCAST_GRP = '224.1.1.2' 
                 MCAST_PORT = 5005
+                self._id = random.randint(0, 10000)
                 self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
                 try:
                         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -161,46 +155,53 @@ class Slave:
                 self.sock.setsockopt(socket.SOL_IP, socket.IP_MULTICAST_IF, socket.inet_aton(host))
                 self.sock.setsockopt(socket.SOL_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton(MCAST_GRP) + socket.inet_aton(host))
                 
-                MCAST_GRP2 = '224.1.1.1' 
-                MCAST_PORT2 = 5000
-                self.sock2 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-                try:
-                        self.sock2.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                except AttributeError:
-                        pass
-                self.sock2.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 32) 
-                self.sock2.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 1)
+                self.sel.register(self.sock, selectors.EVENT_READ, self.accept) #the socket is ready to read
+                msg = CDProto.register(self._id,self.numSlaves, self.proxPass)
+                CDProto.send_msg(self.sock, msg)
 
-                self.sock2.bind((MCAST_GRP2, MCAST_PORT2))
-                host = socket.gethostbyname(socket.gethostname())
-                self.sock2.setsockopt(socket.SOL_IP, socket.IP_MULTICAST_IF, socket.inet_aton(host))
-                self.sock2.setsockopt(socket.SOL_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton(MCAST_GRP2) + socket.inet_aton(host))
+
+                # MCAST_GRP2 = '224.1.1.1' 
+                # MCAST_PORT2 = 8000
+                # self.sock2 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+                # try:
+                #         self.sock2.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                # except AttributeError:
+                #         pass
+                # self.sock2.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 32) 
+                # self.sock2.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 1)
+
+                # self.sock2.bind((MCAST_GRP2, MCAST_PORT2))
+                # host = socket.gethostbyname(socket.gethostname())
+                # self.sock2.setsockopt(socket.SOL_IP, socket.IP_MULTICAST_IF, socket.inet_aton(host))
+                # self.sock2.setsockopt(socket.SOL_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton(MCAST_GRP2) + socket.inet_aton(host))
                 
 
         def dofunc(self):
-                #mandar o self.tabela[proxPass] para a main
-                print(self.tabela[self.proxPass])
-                self.send_msg_server(self.sock2, 'root', self.tabela[self.proxPass], '224.1.1.1', 5000)
+                self.send_msg_server(self.sock2,'root',self.tabela[self.proxPass])#mandar o self.tabela[proxPass] para a main
                 solved=self.read2(self.sock2, '255.255.255.0')
-                if solved:
-                        self._notfound = False
+                if solved: #encontrou a pass
+                        msg=CDProto.password(self.tabela[self.proxPass])
+                        CDProto.send_msg(self.sock,msg)
+                        self._notfound=False
+                        self.sock.close()
+                        self.sock2.close()
                 else:
-                        self.proxPass = self.proxPass + self.numSlaves
-                #self.sel2.select()
-                #dps de receber mensagem
-                #if not ok, incrementar self.proxPass=self.proxPass+self.numSlaves
-                #else, enviar correct, self._notfounf=False e conn.close() 
-                pass
+                        if(self.proxPass+self.numSlaves>len(self.tabela)): #chegamos ao fim da lista
+                                self.proxPass=-1 #vamos percorrer um a um
+                                self.numSlaves=1
+                        self.proxPass=self.proxPass+self.numSlaves
         def accept(self,sock, mask):
-                conn, addr = self.sock.accept()  # Should be ready
+                print("aceitei")
+                conn, addr = sock.accept()  # Should be ready
                 conn.setblocking(False)
                 self.sel.register(conn, selectors.EVENT_READ, self.read)
         def accept2(self,sock, mask):
-                conn, addr = self.sock.accept()  # Should be ready
+                conn, addr = sock.accept()  # Should be ready
                 conn.setblocking(False)
                 self.sel.register(conn, selectors.EVENT_READ, self.read2)
 
         def read(self,conn, mask):
+                print("-----------------read")
                 data = CDProto.recv_msg(conn)  #the server reads the message sent through the socket
                 if(data!=None):
                         comm=data['type']
@@ -215,8 +216,8 @@ class Slave:
                                 conn.close()
                     
         def read2(self,conn,mask):
-                conn.setblocking(True)
-                conn.recv(1)
+                conn.setblocking(False)
+                #conn.recv(1)
                 data = CDProto.recv_msg_server(conn)
                 print(data)
                 if "OK" in data:
@@ -225,9 +226,10 @@ class Slave:
                     
         
 
-        def send_msg_server(cls, connection: socket, username: str, password: str, MCAST_GRP: str,  MCAST_PORT: int):
+        def send_msg_server(cls, connection: socket, username: str, password: str):
                 """Sends through a connection a Message object."""
                 msg = username + ":" + password
+                print(password)
                 msg_to_bytes = msg.encode("ascii")
                 base64_bytes = base64.b64encode(msg_to_bytes)
                 base64_msg = base64_bytes.decode('ascii')
@@ -239,12 +241,16 @@ class Slave:
                 mess=len(data).to_bytes(2,byteorder='big') #tamanho da mensagem em bytes
                 mess+=data #mensagem final contendo o cabeçalho e a mensagem
                 #connection.send(mess) #enviar mensagem final    
-                print(msg)
-                connection.sendto(mess, (MCAST_GRP, MCAST_PORT))
+                #print(msg)
+                connection.send(mess)
 
 
 if __name__ == "__main__":
         slave = Slave()
         while slave._notfound:
-                slave.dofunc()    
+                slave.dofunc()  
+                events = slave.sel.select()
+                for key, mask in events:
+                        callback = key.data
+                        callback(key.fileobj, mask)  
                         
