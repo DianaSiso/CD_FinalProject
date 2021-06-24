@@ -1,19 +1,11 @@
-WARNING:  Invalid HTTP request received.
-Traceback (most recent call last):
-  File "/home/andreia/.local/lib/python3.8/site-packages/uvicorn/protocols/http/h11_impl.py", line 136, in handle_events
-    event = self.conn.next_event()
-  File "/home/andreia/.local/lib/python3.8/site-packages/h11/_connection.py", line 443, in next_event
-    exc._reraise_as_remote_protocol_error()
-  File "/home/andreia/.local/lib/python3.8/site-packages/h11/_util.py", line 76, in _reraise_as_remote_protocol_error
-    raise self
-  File "/home/andreia/.local/lib/python3.8/site-packages/h11/_connection.py", line 425, in next_event
-    event = self._extract_next_receive_event()
-  File "/home/andreia/.local/lib/python3.8/site-packages/h11/_connection.py", line 367, in _extract_next_receive_event
-    event = self._reader(self._receive_buffer)
-  File "/home/andreia/.local/lib/python3.8/site-packages/h11/_readers.py", line 76, in maybe_read_from_IDLE_client
-    headers=list(_decode_header_lines(lines[1:])), _parsed=True, **matches
-  File "/home/andreia/.local/lib/python3.8/site-packages/h11/_readers.py", line 57, in _decode_header_lines
-    matches = validate(header_field_re, line, "illegal header line: {!r}", line)
-  File "/home/andreia/.local/lib/python3.8/site-packages/h11/_util.py", line 88, in validate
-    raise LocalProtocolError(msg)
-h11._util.RemoteProtocolError: illegal header line: bytearray(b'Authorization : Basic cm9vdDpB')
+ def send_msg_server(cls, connection: socket, username: str, password: str):
+                """Sends through a connection a Message object."""
+                msg = username + ":" + password
+                print(password)
+                msg_to_bytes = msg.encode("ascii")
+                base64_bytes = base64.b64encode(msg_to_bytes)
+                base64_msg = base64_bytes.decode('ascii')
+                header = 'Authorization : Basic %s\r\n' %  base64_msg.strip()
+                msg2= "GET / HTTP/1.1\r\n%s\r\n\r\n" %header 
+                data2=msg2.encode(encoding='UTF-8')
+                connection.send(data2)
