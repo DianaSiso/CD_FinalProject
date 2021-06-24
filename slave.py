@@ -110,10 +110,13 @@ class CDProto:
         try:
             header=connection.recv(2) #recevemos os 2 primeiros bits
             head=int.from_bytes(header,byteorder='big') #contem o tamanho da mensagem 
+            
             if head!=0:
+                print(head)
                 message=connection.recv(head) #recebemos os bits correspondente á mensagem
                 datat=message.decode(encoding='UTF-8')#descodificamos a mensagem 
                 data=json.loads(datat) # vira json
+                print(message)
                 return data  
             else:
                 return None
@@ -130,13 +133,12 @@ class Slave:
                 self._notfound=True
                 #socket entre slaves
                 self.sel=selectors.DefaultSelector()
-                
+
                 #socket com main
                 self.sel2=selectors.DefaultSelector()
                 self.sock2 = socket.socket()     
-                self.sock2.bind(('127.0.1.1', 8000))
-                self.sock2.listen(100)
-                self.sel2.register(self.sock2, selectors.EVENT_READ, self.accept2) #the socket is ready to read
+                self.sock2.connect(('127.0.1.1', 8000))
+                self.sel2.register(self.sock2, selectors.EVENT_READ, self.read2) #the socket is ready to read
                 # ip main 127.0.1.1
 
                 MCAST_GRP = '224.1.1.2' 
@@ -155,8 +157,9 @@ class Slave:
                 self.sock.setsockopt(socket.SOL_IP, socket.IP_MULTICAST_IF, socket.inet_aton(host))
                 self.sock.setsockopt(socket.SOL_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton(MCAST_GRP) + socket.inet_aton(host))
                 
-                self.sel.register(self.sock, selectors.EVENT_READ, self.accept) #the socket is ready to read
+                self.sel.register(self.sock, selectors.EVENT_READ, self.read) #the socket is ready to read
                 msg = CDProto.register(self._id,self.numSlaves, self.proxPass)
+                print(msg)
                 CDProto.send_msg(self.sock, msg)
 
 
@@ -190,15 +193,16 @@ class Slave:
                                 self.proxPass=-1 #vamos percorrer um a um
                                 self.numSlaves=1
                         self.proxPass=self.proxPass+self.numSlaves
-        def accept(self,sock, mask):
-                print("aceitei")
-                conn, addr = sock.accept()  # Should be ready
-                conn.setblocking(False)
-                self.sel.register(conn, selectors.EVENT_READ, self.read)
-        def accept2(self,sock, mask):
-                conn, addr = sock.accept()  # Should be ready
-                conn.setblocking(False)
-                self.sel.register(conn, selectors.EVENT_READ, self.read2)
+        
+        #def accept(self,sock, mask):
+        #        conn, addr = sock.accept()  # Should be ready
+        #        conn.setblocking(False)
+        #        self.sel.register(conn, selectors.EVENT_READ, self.read)
+
+        #def accept2(self,sock, mask):
+        #        conn, addr = sock.accept()  # Should be ready
+        #        conn.setblocking(False)
+        #        self.sel.register(conn, selectors.EVENT_READ, self.read2)
 
         def read(self,conn, mask):
                 print("-----------------read")
@@ -237,17 +241,20 @@ class Slave:
                 protocolo = "\nGET / HTTP/1.1"
                 linhaEmBranco = "\n"
                 msg = header + protocolo + linhaEmBranco
+                msg2= "GET / HTTP/1.1\r\n%s\r\n\r\n" %header 
                 data=msg.encode(encoding='UTF-8') #dar encode para bytes
-                mess=len(data).to_bytes(2,byteorder='big') #tamanho da mensagem em bytes
-                mess+=data #mensagem final contendo o cabeçalho e a mensagem
+                #mess=len(data).to_bytes(2,byteorder='big') #tamanho da mensagem em bytes
+                #mess+=data #mensagem final contendo o cabeçalho e a mensagem
                 #connection.send(mess) #enviar mensagem final    
-                #print(msg)
-                connection.send(mess)
+                print("----------------DATA----------------")
+                print(msg2)
+                connection.send(msg2.encode())
 
 
 if __name__ == "__main__":
         slave = Slave()
         while slave._notfound:
+                print("------------------------------")
                 slave.dofunc()  
                 events = slave.sel.select()
                 for key, mask in events:
