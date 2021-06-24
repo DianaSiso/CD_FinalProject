@@ -98,10 +98,13 @@ class CDProto:
     @classmethod
     def send_msg(cls, connection: socket, msg: Message):
        print("enviei")
+       
        data=msg.__str__().encode(encoding='UTF-8') #dar encode para bytes
        mess=len(data).to_bytes(2,byteorder='big') #tamanho da mensagem em bytes
-       mess+=data #mensagem final contendo o cabeçalho e a mensagem
-       connection.sendto(mess, ('224.1.1.2', 5005))    
+       snd=mess+data #mensagem final contendo o cabeçalho e a mensagem
+       print(len(data))
+       print(snd)
+       connection.sendto(snd, ('224.1.1.2', 5005))    
 
     @classmethod
     def recv_msg(cls, connection: socket) -> Message:
@@ -110,13 +113,11 @@ class CDProto:
         try:
             header=connection.recv(2) #recevemos os 2 primeiros bits
             head=int.from_bytes(header,byteorder='big') #contem o tamanho da mensagem 
-            
             if head!=0:
-                print(head)
                 message=connection.recv(head) #recebemos os bits correspondente á mensagem
-                datat=message.decode(encoding='UTF-8')#descodificamos a mensagem 
+                datat=message[2:].decode(encoding='UTF-8')#descodificamos a mensagem
                 data=json.loads(datat) # vira json
-                print(message)
+                print(data)
                 return data  
             else:
                 return None
@@ -135,10 +136,10 @@ class Slave:
                 self.sel=selectors.DefaultSelector()
 
                 #socket com main
-                self.sel2=selectors.DefaultSelector()
-                self.sock2 = socket.socket()     
-                self.sock2.connect(('127.0.1.1', 8000))
-                self.sel2.register(self.sock2, selectors.EVENT_READ, self.read2) #the socket is ready to read
+                #self.sel2=selectors.DefaultSelector()
+                #self.sock2 = socket.socket()     
+                #self.sock2.connect(('127.0.1.1', 8000))
+                #self.sel2.register(self.sock2, selectors.EVENT_READ, self.read2) #the socket is ready to read
                 # ip main 127.0.1.1
 
                 MCAST_GRP = '224.1.1.2' 
@@ -180,8 +181,9 @@ class Slave:
                 
 
         def dofunc(self):
-                self.send_msg_server(self.sock2,'root',self.tabela[self.proxPass])#mandar o self.tabela[proxPass] para a main
-                solved=self.read2(self.sock2, '255.255.255.0')
+                #self.send_msg_server(self.sock2,'root',self.tabela[self.proxPass])#mandar o self.tabela[proxPass] para a main
+                #solved=self.read2(self.sock2, '255.255.255.0')
+                solved=False
                 if solved: #encontrou a pass
                         msg=CDProto.password(self.tabela[self.proxPass])
                         CDProto.send_msg(self.sock,msg)
@@ -210,7 +212,7 @@ class Slave:
                 if(data!=None):
                         comm=data['type']
                         if comm=="register":
-                                msg = CDProto.reply(self._ip,self.numSlaves+1, self.proxPass)
+                                msg = CDProto.reply(self._id,self.numSlaves+1, self.proxPass+1)
                                 CDProto.send_msg(conn, msg)
                         elif comm=="reply":
                                 #funcao
@@ -237,18 +239,15 @@ class Slave:
                 msg_to_bytes = msg.encode("ascii")
                 base64_bytes = base64.b64encode(msg_to_bytes)
                 base64_msg = base64_bytes.decode('ascii')
-                header = 'Authorization : Basic %s' %  base64_msg
-                protocolo = "\nGET / HTTP/1.1"
-                linhaEmBranco = "\n"
-                msg = header + protocolo + linhaEmBranco
+                header = 'Authorization : Basic %s\r\n' %  base64_msg.strip()
                 msg2= "GET / HTTP/1.1\r\n%s\r\n\r\n" %header 
-                data=msg.encode(encoding='UTF-8') #dar encode para bytes
+                data2=msg2.encode(encoding='UTF-8')
                 #mess=len(data).to_bytes(2,byteorder='big') #tamanho da mensagem em bytes
                 #mess+=data #mensagem final contendo o cabeçalho e a mensagem
                 #connection.send(mess) #enviar mensagem final    
                 print("----------------DATA----------------")
                 print(msg2)
-                connection.send(msg2.encode())
+                connection.send(data2)
 
 
 if __name__ == "__main__":
