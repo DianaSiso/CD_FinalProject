@@ -92,8 +92,10 @@ class CDProto:
                 pass
     
         #join all parts to make final string
-        print(total_data)
-        return ''.join(total_data)
+        res=""
+        for elem in total_data:
+            res+=elem.decode(encoding='UTF-8')
+        return res
 
     @classmethod
     def send_msg(cls, connection: socket, msg: Message):
@@ -102,6 +104,8 @@ class CDProto:
        data=msg.__str__().encode(encoding='UTF-8') #dar encode para bytes
        mess=len(data).to_bytes(2,byteorder='big') #tamanho da mensagem em bytes
        snd=mess+data #mensagem final contendo o cabeçalho e a mensagem
+       print(data)
+       print(mess)
        print(len(data))
        print(snd)
        connection.sendto(snd, ('224.1.1.2', 5005))    
@@ -111,13 +115,21 @@ class CDProto:
         """Receives through a connection a Message object."""
         print("recebi")
         try:
+            
             header=connection.recv(2) #recevemos os 2 primeiros bits
-            head=int.from_bytes(header,byteorder='big') #contem o tamanho da mensagem 
+            print("----HEADER----")
+            print(header)
+            head=int.from_bytes(header,byteorder='big') #contem o tamanho da mensagem
+            print(head)
             if head!=0:
-                message=connection.recv(head) #recebemos os bits correspondente á mensagem
-                datat=message[2:].decode(encoding='UTF-8')#descodificamos a mensagem
-                data=json.loads(datat) # vira json
-                print(data)
+                print("entrei")
+                message=connection.recv(head+2) #recebemos os bits correspondente á mensagem
+                print("li msg")
+                datat=message.decode(encoding='UTF-8')#descodificamos a mensagem
+                print(head)
+                print(datat)
+                print(datat[2:])
+                data=json.loads(datat[2:]) # vira json
                 return data  
             else:
                 return None
@@ -130,10 +142,7 @@ class Slave:
                 self.numSlaves = 1
                 self.proxPass = 0
                 self.tabela = string.ascii_uppercase + string.ascii_lowercase + string.digits
-                #definir ip
                 self._notfound=True
-                #socket entre slaves
-                self.sel=selectors.DefaultSelector()
 
                 #socket com main
                 #self.sel2=selectors.DefaultSelector()
@@ -142,6 +151,8 @@ class Slave:
                 #self.sel2.register(self.sock2, selectors.EVENT_READ, self.read2) #the socket is ready to read
                 # ip main 127.0.1.1
 
+                #socket entre slaves
+                self.sel=selectors.DefaultSelector()
                 MCAST_GRP = '224.1.1.2' 
                 MCAST_PORT = 5005
                 self._id = random.randint(0, 10000)
@@ -152,35 +163,18 @@ class Slave:
                         pass
                 self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 32) 
                 self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 1)
-
                 self.sock.bind((MCAST_GRP, MCAST_PORT))
                 host = socket.gethostbyname(socket.gethostname())
                 self.sock.setsockopt(socket.SOL_IP, socket.IP_MULTICAST_IF, socket.inet_aton(host))
                 self.sock.setsockopt(socket.SOL_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton(MCAST_GRP) + socket.inet_aton(host))
-                
                 self.sel.register(self.sock, selectors.EVENT_READ, self.read) #the socket is ready to read
+                #enviar mensagem de registo
                 msg = CDProto.register(self._id,self.numSlaves, self.proxPass)
                 print(msg)
                 CDProto.send_msg(self.sock, msg)
 
-
-                # MCAST_GRP2 = '224.1.1.1' 
-                # MCAST_PORT2 = 8000
-                # self.sock2 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-                # try:
-                #         self.sock2.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                # except AttributeError:
-                #         pass
-                # self.sock2.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 32) 
-                # self.sock2.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 1)
-
-                # self.sock2.bind((MCAST_GRP2, MCAST_PORT2))
-                # host = socket.gethostbyname(socket.gethostname())
-                # self.sock2.setsockopt(socket.SOL_IP, socket.IP_MULTICAST_IF, socket.inet_aton(host))
-                # self.sock2.setsockopt(socket.SOL_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton(MCAST_GRP2) + socket.inet_aton(host))
-                
-
         def dofunc(self):
+                print("entrei no dofunc")
                 #self.send_msg_server(self.sock2,'root',self.tabela[self.proxPass])#mandar o self.tabela[proxPass] para a main
                 #solved=self.read2(self.sock2, '255.255.255.0')
                 solved=False
@@ -191,11 +185,13 @@ class Slave:
                         self.sock.close()
                         self.sock2.close()
                 else:
+                        print("entrei no else")
                         if(self.proxPass+self.numSlaves>len(self.tabela)): #chegamos ao fim da lista
                                 self.proxPass=-1 #vamos percorrer um a um
                                 self.numSlaves=1
                         self.proxPass=self.proxPass+self.numSlaves
-        
+                time.sleep(5)
+                pass
         #def accept(self,sock, mask):
         #        conn, addr = sock.accept()  # Should be ready
         #        conn.setblocking(False)
@@ -227,7 +223,9 @@ class Slave:
                 data = CDProto.recv_msg_server(conn)
                 print(data)
                 if "OK" in data:
-                        return True      
+                        print("true")
+                        return True
+                print("false")       
                 return False
                     
         
@@ -239,8 +237,8 @@ class Slave:
                 msg_to_bytes = msg.encode("ascii")
                 base64_bytes = base64.b64encode(msg_to_bytes)
                 base64_msg = base64_bytes.decode('ascii')
-                header = 'Authorization : Basic %s\r\n' %  base64_msg.strip()
-                msg2= "GET / HTTP/1.1\r\n%s\r\n\r\n" %header 
+                header = 'Authorization: Basic %s\r\n' %  base64_msg.strip()
+                msg2= "GET / HTTP/1.1\r\nHost: localhost:8000\r\n%s\r\n\r\n" %header 
                 data2=msg2.encode(encoding='UTF-8')
                 #mess=len(data).to_bytes(2,byteorder='big') #tamanho da mensagem em bytes
                 #mess+=data #mensagem final contendo o cabeçalho e a mensagem
