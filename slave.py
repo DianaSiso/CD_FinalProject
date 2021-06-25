@@ -26,10 +26,11 @@ class RegisterMessage(Message):
 
 class ReplyMessage(Message):
     #mensagem enviada para o slave por outros slaves que já existam
-    def __init__(self,id, numSlaves, proxPass,type="reply"):
-        super().__init__(id, numSlaves, proxPass,type)
+    def __init__(self, from1, to1, numSlaves, proxPass,type="reply"):
+        super().__init__(from1, numSlaves, proxPass,type)
+        self.to1=to1
     def __str__(self):
-        return json.dumps({'type':self.type, 'id': self.id, 'numSlaves':self.numSlaves,'proxPass': self.proxPass})
+        return json.dumps({'type':self.type, 'from1': self.id,'to1':self.to1, 'numSlaves':self.numSlaves,'proxPass': self.proxPass})
 
 class CorrectMessage(Message):
     #mensagem enviada para o slave por outros slaves que já existam
@@ -49,8 +50,8 @@ class CDProto:
         return RegisterMessage(id, numSlaves, proxPass)
     
     @classmethod
-    def reply(cls, id: int, numSlaves: int, proxPass: int) -> ReplyMessage:
-        return ReplyMessage(id, numSlaves, proxPass)
+    def reply(cls, from1: int,to1:int, numSlaves: int, proxPass: int) -> ReplyMessage:
+        return ReplyMessage( from1, to1, numSlaves, proxPass)
 
 
     @classmethod
@@ -99,16 +100,15 @@ class CDProto:
 
     @classmethod
     def send_msg(cls, connection: socket, msg: Message):
-       print("enviei")
+        print("enviei")
        
-       data=msg.__str__().encode(encoding='UTF-8') #dar encode para bytes
-       mess=len(data).to_bytes(2,byteorder='big') #tamanho da mensagem em bytes
-       snd=mess+data #mensagem final contendo o cabeçalho e a mensagem
-       print(data)
-       print(mess)
-       print(len(data))
-       print(snd)
-       connection.sendto(snd, ('224.1.1.2', 5005))    
+        data=msg.__str__().encode(encoding='UTF-8') #dar encode para bytes
+        mess=len(data).to_bytes(2,byteorder='big') #tamanho da mensagem em bytes
+        snd=mess+data #mensagem final contendo o cabeçalho e a mensage
+        print("size e data original")
+        print(len(data))
+        print(snd)
+        connection.sendto(data, ('224.1.1.2', 5005))  
 
     @classmethod
     def recv_msg(cls, connection: socket) -> Message:
@@ -116,23 +116,26 @@ class CDProto:
         print("recebi")
         try:
             
-            header=connection.recv(2) #recevemos os 2 primeiros bits
-            print("----HEADER----")
-            print(header)
-            head=int.from_bytes(header,byteorder='big') #contem o tamanho da mensagem
-            print(head)
-            if head!=0:
+            #header=connection.recv(2) #recevemos os 2 primeiros bits
+            #print("----HEADER----")
+            #print(header)
+            #head=int.from_bytes(header,byteorder='big') #contem o tamanho da mensagem
+            #print(head)
+            #if head!=0:
                 print("entrei")
-                message=connection.recv(head+2) #recebemos os bits correspondente á mensagem
-                print("li msg")
-                datat=message.decode(encoding='UTF-8')#descodificamos a mensagem
-                print(head)
-                print(datat)
-                print(datat[2:])
-                data=json.loads(datat[2:]) # vira json
-                return data  
-            else:
-                return None
+                connection.setblocking(False)
+                message=connection.recv(100) #recebemos os bits correspondente á mensagem
+                if (message!=None):
+                    print("li msg")
+                    datat=message.decode(encoding='UTF-8')#descodificamos a mensagem
+                    #print(head)
+                    print(datat)
+                    data=json.loads(datat) # vira json
+                    return data  
+                else:
+                    return None
+            #else:
+            #    return None
         except SocketError as e:
             return None
 
@@ -169,6 +172,7 @@ class Slave:
                 self.sock.setsockopt(socket.SOL_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton(MCAST_GRP) + socket.inet_aton(host))
                 self.sel.register(self.sock, selectors.EVENT_READ, self.read) #the socket is ready to read
                 #enviar mensagem de registo
+                print(self._id)
                 msg = CDProto.register(self._id,self.numSlaves, self.proxPass)
                 print(msg)
                 CDProto.send_msg(self.sock, msg)
@@ -189,8 +193,10 @@ class Slave:
                         if(self.proxPass+self.numSlaves>len(self.tabela)): #chegamos ao fim da lista
                                 self.proxPass=-1 #vamos percorrer um a um
                                 self.numSlaves=1
+                        print(self.proxPass)
                         self.proxPass=self.proxPass+self.numSlaves
-                time.sleep(5)
+                        
+                time.sleep(3)
                 pass
         #def accept(self,sock, mask):
         #        conn, addr = sock.accept()  # Should be ready
@@ -208,11 +214,17 @@ class Slave:
                 if(data!=None):
                         comm=data['type']
                         if comm=="register":
-                                msg = CDProto.reply(self._id,self.numSlaves+1, self.proxPass+1)
-                                CDProto.send_msg(conn, msg)
+                                if(data['id']!=self._id):
+                                    self.numSlaves=self.numSlaves+1
+                                    msg = CDProto.reply(self._id,data['id'],self.numSlaves, self.proxPass+self.numSlaves-1)
+                                    CDProto.send_msg(conn, msg)
                         elif comm=="reply":
                                 #funcao
-                                pass
+                                if(data['numSlaves']>self.numSlaves):
+                                    self.numSlaves=data['numSlaves']
+                                if(data['from1']!=self._id and data['to1']==self._id):
+                                    if(self.proxPass<data['proxPass']):
+                                        self.proxPass=data['proxPass']-self.numSlaves
                         elif comm=='correct':
                                 self._notfound=False
                                 conn.close()
@@ -239,10 +251,7 @@ class Slave:
                 base64_msg = base64_bytes.decode('ascii')
                 header = 'Authorization: Basic %s\r\n' %  base64_msg.strip()
                 msg2= "GET / HTTP/1.1\r\nHost: localhost:8000\r\n%s\r\n\r\n" %header 
-                data2=msg2.encode(encoding='UTF-8')
-                #mess=len(data).to_bytes(2,byteorder='big') #tamanho da mensagem em bytes
-                #mess+=data #mensagem final contendo o cabeçalho e a mensagem
-                #connection.send(mess) #enviar mensagem final    
+                data2=msg2.encode("ascii") 
                 print("----------------DATA----------------")
                 print(msg2)
                 connection.send(data2)
@@ -250,10 +259,11 @@ class Slave:
 
 if __name__ == "__main__":
         slave = Slave()
+        events = slave.sel.select()
         while slave._notfound:
                 print("------------------------------")
                 slave.dofunc()  
-                events = slave.sel.select()
+                
                 for key, mask in events:
                         callback = key.data
                         callback(key.fileobj, mask)  
