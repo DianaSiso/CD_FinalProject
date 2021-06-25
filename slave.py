@@ -49,6 +49,7 @@ class BossMessage(Message):
     def __str__(self):
         return json.dumps({'type':self.type, 'numSlaves': self.numSlaves, 'boss' : self.id, 'to' : self.to1, 'proxPass' : self.proxPass, 'time': self.time2})
 
+
 class PeriodicMessage(Message):
     #mensagem enviada para o slave por outros slaves que já existam
     def __init__(self,id, numSlaves,type="periodic"):
@@ -58,10 +59,10 @@ class PeriodicMessage(Message):
 
 class ByeMessage(Message):
     #mensagem enviada para o slave por outros slaves que já existam
-    def __init__(self, type="bye"):
-        super().__init__(type)
+    def __init__(self, id, type="bye"):
+        super().__init__(id, 0, 0, type)
     def __str__(self):
-        return json.dumps({'type':self.type})
+        return json.dumps({'id': self.id, 'type':self.type})
 
 class TryMessage(Message):
     #mensagem enviada para o slave por outros slaves que já existam
@@ -96,9 +97,10 @@ class CDProto:
     @classmethod
     def periodic(cls, id: int) -> PeriodicMessage:
         return PeriodicMessage(id)
-    
-    def bye(cls) -> ByeMessage:
-        return ByeMessage()
+
+    @classmethod
+    def bye(cls, id : int) -> ByeMessage:
+        return ByeMessage(id)
 
     @classmethod
     def try2(cls, id : int, psw: str) -> TryMessage:
@@ -201,7 +203,7 @@ class Slave:
                 #socket entre slaves
                 self.sou_boss = True
                 self.time_boss = time.time() + 10000
-                self.id_boss = 0
+                self.id_boss = -1
                 self.info_slaves = []
                 self.ttl = 0
                 self.info_testados = {}
@@ -230,23 +232,37 @@ class Slave:
                 
         def check(self):
             print("entrei no check")
+            self.falecido = -1
             for elem in self.info_testados:
                 if ((time.time() - self.info_testados[elem][1]) > 10):
                     self.numSlaves = self.numSlaves - 1
+                    self.falecido = elem
+
+            for elem in self.info_testados:
+                if (self.falecido != -1):
                     if (self.proxPass > self.info_testados[elem][0]):
                         self.proxPass = self.info_testados[elem][0]
-                    
-                    self.falecido = elem
-                    print(elem)
-                    print("MORREU")
-            if self.falecido == self.id_boss:
+
+               
                 
-            else:
-                for elem in self.info_slaves:
-                    if elem != self.falecido and self.sou_boss:
-                        msg = CDProto.update(self._id, elem, self.numSlaves, self.proxPass+1)
-                        CDProto.send_msg(self.sock, msg)
-            
+            if (self.falecido != -1):
+                print(self.falecido)
+                print("MORREU")
+                if self.falecido == self.id_boss:
+                    self.info_slaves = []
+                    self.sou_boss = True
+                    self.id_boss = -1
+                    msg = CDProto.register(self._id,self.numSlaves, self.proxPass)
+                    CDProto.send_msg(self.sock, msg)
+                    time.sleep(5)
+                else:
+                    for elem in self.info_slaves:
+                        self.info_slaves.remove(self.falecido)
+                        if elem != self.falecido and self.sou_boss:
+                            msg = CDProto.update(self._id, elem, self.numSlaves, self.proxPass+1)
+                            CDProto.send_msg(self.sock, msg)
+                self.info_testados.pop(self.falecido)
+        
             
 
         def dofunc(self):
@@ -288,7 +304,7 @@ class Slave:
                         if comm=="register":
                                 if (self.sou_boss and data['id'] != self._id) :
                                     if (self.numSlaves == 3):
-                                        msg = CDProto.bye()
+                                        msg = CDProto.bye(data['id'])
                                         CDProto.send_msg(conn, msg)
                                     else:
                                         self.info_slaves.append(data['id'])
@@ -327,7 +343,8 @@ class Slave:
                                         self.numSlaves = data['numSlaves']
                                         self.proxPass = data['proxPass']
                         elif comm=='bye':
-                                SystemExit(0)
+                                if (data['id'] == self._id):
+                                    exit()
                         elif comm=='try':
                                 if data['id'] in self.info_testados:
                                     if self.info_testados[data['id']][0] < data['psw']:
