@@ -24,13 +24,13 @@ class RegisterMessage(Message):
     def __str__(self):
         return json.dumps({'type':self.type, 'id': self.id, 'numSlaves':self.numSlaves,'proxPass': self.proxPass})
 
-class ReplyMessage(Message):
+class UpdateMessage(Message):
     #mensagem enviada para o slave por outros slaves que já existam
-    def __init__(self, from1, to1, numSlaves, proxPass,type="reply"):
+    def __init__(self, from1, to1, numSlaves, proxPass,type="update"):
         super().__init__(from1, numSlaves, proxPass,type)
         self.to1=to1
     def __str__(self):
-        return json.dumps({'type':self.type, 'from1': self.id,'to1':self.to1, 'numSlaves':self.numSlaves,'proxPass': self.proxPass})
+        return json.dumps({'type':self.type, 'from1': self.id,'to':self.to1, 'numSlaves':self.numSlaves,'proxPass': self.proxPass})
 
 class CorrectMessage(Message):
     #mensagem enviada para o slave por outros slaves que já existam
@@ -38,6 +38,37 @@ class CorrectMessage(Message):
         super().__init__(0, 0, 0, type, psw)
     def __str__(self):
         return json.dumps({'type':self.type, 'psw': self.psw})
+
+
+class BossMessage(Message):
+    #mensagem enviada para o slave por outros slaves que já existam
+    def __init__(self,id, to1, numSlaves,proxPass, time2, type="boss"):
+        super().__init__(id, numSlaves, proxPass, type)
+        self.to1 = to1
+        self.time2 = time2
+    def __str__(self):
+        return json.dumps({'type':self.type, 'numSlaves': self.numSlaves, 'boss' : self.id, 'to' : self.to1, 'proxPass' : self.proxPass, 'time': self.time2})
+
+class PeriodicMessage(Message):
+    #mensagem enviada para o slave por outros slaves que já existam
+    def __init__(self,id, numSlaves,type="periodic"):
+        super().__init__(id, numSlaves, 0, type)
+    def __str__(self):
+        return json.dumps({'type':self.type, 'id' : self.id})
+
+class ByeMessage(Message):
+    #mensagem enviada para o slave por outros slaves que já existam
+    def __init__(self, type="bye"):
+        super().__init__(type)
+    def __str__(self):
+        return json.dumps({'type':self.type})
+
+class TryMessage(Message):
+    #mensagem enviada para o slave por outros slaves que já existam
+    def __init__(self,id, psw,type="try"):
+        super().__init__(id, 0, 0, type, psw)
+    def __str__(self):
+        return json.dumps({'type':self.type, 'id' : self.id, 'psw': self.psw, 'time' : time.time()})
 
 
 
@@ -50,13 +81,29 @@ class CDProto:
         return RegisterMessage(id, numSlaves, proxPass)
     
     @classmethod
-    def reply(cls, from1: int,to1:int, numSlaves: int, proxPass: int) -> ReplyMessage:
-        return ReplyMessage( from1, to1, numSlaves, proxPass)
+    def update(cls, from1: int,to1:int, numSlaves: int, proxPass: int) -> UpdateMessage:
+        return UpdateMessage( from1, to1, numSlaves, proxPass)
 
 
     @classmethod
     def password(cls, psw: str) -> CorrectMessage:
         return CorrectMessage(psw)
+    
+    @classmethod
+    def boss(cls, id: int, to1: int,  numSlaves : int, proxPass : int, time2 : float) -> BossMessage:
+        return BossMessage(id, to1, numSlaves, proxPass, time2)
+    
+    @classmethod
+    def periodic(cls, id: int) -> PeriodicMessage:
+        return PeriodicMessage(id)
+    
+    def bye(cls) -> ByeMessage:
+        return ByeMessage()
+
+    @classmethod
+    def try2(cls, id : int, psw: str) -> TryMessage:
+        return TryMessage(id, psw)
+    
     
     @classmethod
     def recv_msg_server(cls,connection:socket) -> str:
@@ -100,20 +147,17 @@ class CDProto:
 
     @classmethod
     def send_msg(cls, connection: socket, msg: Message):
-        print("enviei")
        
         data=msg.__str__().encode(encoding='UTF-8') #dar encode para bytes
-        mess=len(data).to_bytes(2,byteorder='big') #tamanho da mensagem em bytes
-        snd=mess+data #mensagem final contendo o cabeçalho e a mensage
-        print("size e data original")
-        print(len(data))
-        print(snd)
+        # print("size e data original")
+        # print(len(data))
+        print(data)
         connection.sendto(data, ('224.1.1.2', 5005))  
 
     @classmethod
     def recv_msg(cls, connection: socket) -> Message:
         """Receives through a connection a Message object."""
-        print("recebi")
+
         try:
             
             #header=connection.recv(2) #recevemos os 2 primeiros bits
@@ -122,11 +166,11 @@ class CDProto:
             #head=int.from_bytes(header,byteorder='big') #contem o tamanho da mensagem
             #print(head)
             #if head!=0:
-                print("entrei")
+
                 connection.setblocking(False)
-                message=connection.recv(100) #recebemos os bits correspondente á mensagem
+                message=connection.recv(1000) #recebemos os bits correspondente á mensagem
                 if (message!=None):
-                    print("li msg")
+                    # print("li msg")
                     datat=message.decode(encoding='UTF-8')#descodificamos a mensagem
                     #print(head)
                     print(datat)
@@ -155,6 +199,12 @@ class Slave:
                 # ip main 127.0.1.1
 
                 #socket entre slaves
+                self.sou_boss = True
+                self.time_boss = time.time() + 10000
+                self.id_boss = 0
+                self.info_slaves = []
+                self.ttl = 0
+                self.info_testados = {}
                 self.sel=selectors.DefaultSelector()
                 MCAST_GRP = '224.1.1.2' 
                 MCAST_PORT = 5005
@@ -173,15 +223,38 @@ class Slave:
                 self.sel.register(self.sock, selectors.EVENT_READ, self.read) #the socket is ready to read
                 #enviar mensagem de registo
                 print(self._id)
+                #o slave vai mandar a mensagem de registo
                 msg = CDProto.register(self._id,self.numSlaves, self.proxPass)
-                print(msg)
                 CDProto.send_msg(self.sock, msg)
+                time.sleep(5)
+                
+        def check(self):
+            print("entrei no check")
+            for elem in self.info_testados:
+                if ((time.time() - self.info_testados[elem][1]) > 10):
+                    self.numSlaves = self.numSlaves - 1
+                    if (self.proxPass > self.info_testados[elem][0]):
+                        self.proxPass = self.info_testados[elem][0]
+                    
+                    self.falecido = elem
+                    print(elem)
+                    print("MORREU")
+            if self.falecido == self.id_boss:
+                
+            else:
+                for elem in self.info_slaves:
+                    if elem != self.falecido and self.sou_boss:
+                        msg = CDProto.update(self._id, elem, self.numSlaves, self.proxPass+1)
+                        CDProto.send_msg(self.sock, msg)
+            
+            
 
         def dofunc(self):
                 print("entrei no dofunc")
                 #self.send_msg_server(self.sock2,'root',self.tabela[self.proxPass])#mandar o self.tabela[proxPass] para a main
                 #solved=self.read2(self.sock2, '255.255.255.0')
                 solved=False
+                self.ttl = self.ttl + 1
                 if solved: #encontrou a pass
                         msg=CDProto.password(self.tabela[self.proxPass])
                         CDProto.send_msg(self.sock,msg)
@@ -189,45 +262,83 @@ class Slave:
                         self.sock.close()
                         self.sock2.close()
                 else:
-                        print("entrei no else")
+                        # print("entrei no else")
+                        if (self.ttl == 5):
+                           
+                            msg = CDProto.try2(self._id, self.proxPass)
+                            CDProto.send_msg(self.sock, msg)
+                            self.ttl = 0
+                            self.check()
                         if(self.proxPass+self.numSlaves>len(self.tabela)): #chegamos ao fim da lista
                                 self.proxPass=-1 #vamos percorrer um a um
                                 self.numSlaves=1
+                        
+
                         print(self.proxPass)
                         self.proxPass=self.proxPass+self.numSlaves
                         
-                time.sleep(3)
+                time.sleep(1)
                 pass
-        #def accept(self,sock, mask):
-        #        conn, addr = sock.accept()  # Should be ready
-        #        conn.setblocking(False)
-        #        self.sel.register(conn, selectors.EVENT_READ, self.read)
-
-        #def accept2(self,sock, mask):
-        #        conn, addr = sock.accept()  # Should be ready
-        #        conn.setblocking(False)
-        #        self.sel.register(conn, selectors.EVENT_READ, self.read2)
-
+      
         def read(self,conn, mask):
-                print("-----------------read")
+                # print("-----------------read")
                 data = CDProto.recv_msg(conn)  #the server reads the message sent through the socket
                 if(data!=None):
                         comm=data['type']
                         if comm=="register":
-                                if(data['id']!=self._id):
-                                    self.numSlaves=self.numSlaves+1
-                                    msg = CDProto.reply(self._id,data['id'],self.numSlaves, self.proxPass+self.numSlaves-1)
-                                    CDProto.send_msg(conn, msg)
-                        elif comm=="reply":
-                                #funcao
-                                if(data['numSlaves']>self.numSlaves):
-                                    self.numSlaves=data['numSlaves']
-                                if(data['from1']!=self._id and data['to1']==self._id):
-                                    if(self.proxPass<data['proxPass']):
-                                        self.proxPass=data['proxPass']-self.numSlaves
+                                if (self.sou_boss and data['id'] != self._id) :
+                                    if (self.numSlaves == 3):
+                                        msg = CDProto.bye()
+                                        CDProto.send_msg(conn, msg)
+                                    else:
+                                        self.info_slaves.append(data['id'])
+                                        self.numSlaves = self.numSlaves + 1
+                                        self.time_boss = time.time()
+                                        msg = CDProto.boss(self._id, data['id'], self.numSlaves, self.proxPass+1, self.time_boss)
+                                        CDProto.send_msg(conn, msg)
+
+                                        for elem in self.info_slaves:
+                                            if (data['id'] != elem):
+                                                msg = CDProto.update(self._id, elem, self.numSlaves, self.proxPass+2)  
+                                                CDProto.send_msg(conn, msg)   
+                        elif comm=="update":
+                               if data['to'] == self._id:
+                                   self.numSlaves = data['numSlaves']
+                                   self.proxPass = data['proxPass']
                         elif comm=='correct':
                                 self._notfound=False
                                 conn.close()
+                        elif comm=='boss':
+                                if data['to'] == self._id:
+                                    if (self.numSlaves < data['numSlaves']):
+                                        print("afinal eu nao sou o boss")
+                                        print(self._id)
+                                        self.id_boss = data['boss']
+                                        self.time_boss = data['time']
+                                        self.sou_boss = False
+                                        self.numSlaves = data['numSlaves']
+                                        self.proxPass = data['proxPass']
+                                    elif (self.time_boss > data['time']):
+                                        print("afinal eu nao sou o boss")
+                                        print(self._id)
+                                        self.id_boss = data['boss']
+                                        self.time_boss = data['time']
+                                        self.sou_boss = False
+                                        self.numSlaves = data['numSlaves']
+                                        self.proxPass = data['proxPass']
+                        elif comm=='bye':
+                                SystemExit(0)
+                        elif comm=='try':
+                                if data['id'] in self.info_testados:
+                                    if self.info_testados[data['id']][0] < data['psw']:
+                                        self.info_testados[data['id']] = (data['psw'], data['time'])
+                                else:
+                                    self.info_testados[data['id']] = (data['psw'], data['time'])
+                                
+                               
+
+
+
                     
         def read2(self,conn,mask):
                 conn.setblocking(False)
@@ -261,7 +372,6 @@ if __name__ == "__main__":
         slave = Slave()
         events = slave.sel.select()
         while slave._notfound:
-                print("------------------------------")
                 slave.dofunc()  
                 
                 for key, mask in events:
