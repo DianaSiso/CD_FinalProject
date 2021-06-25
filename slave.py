@@ -231,42 +231,46 @@ class Slave:
                 time.sleep(5)
                 
         def check(self):
-            print("entrei no check")
+            #print("entrei no check")
+            #print(self.numSlaves)
             self.falecido = -1
+            #print(self.info_testados)
             for elem in self.info_testados:
-                if ((time.time() - self.info_testados[elem][1]) > 10):
-                    self.numSlaves = self.numSlaves - 1
+                if ((time.time() - self.info_testados[elem][1]) > 15 and self.info_testados[elem][0]!=self._id):
                     self.falecido = elem
 
-            for elem in self.info_testados:
-                if (self.falecido != -1):
-                    if (self.proxPass > self.info_testados[elem][0]):
-                        self.proxPass = self.info_testados[elem][0]
-
-               
-                
+            
             if (self.falecido != -1):
-                print(self.falecido)
-                print("MORREU")
+                self.proxPass=100
+                for elem in self.info_testados:
+                    if (self.falecido != -1):
+                        if (self.proxPass > self.info_testados[elem][0]):
+                            self.proxPass = self.info_testados[elem][0]
+                #print(self.falecido)
+                #print("MORREU")
+                #print(self.proxPass)
                 if self.falecido == self.id_boss:
                     self.info_slaves = []
                     self.sou_boss = True
                     self.id_boss = -1
+                    self.numSlaves= 1
                     msg = CDProto.register(self._id,self.numSlaves, self.proxPass)
                     CDProto.send_msg(self.sock, msg)
                     time.sleep(5)
-                else:
-                    for elem in self.info_slaves:
-                        self.info_slaves.remove(self.falecido)
-                        if elem != self.falecido and self.sou_boss:
-                            msg = CDProto.update(self._id, elem, self.numSlaves, self.proxPass+1)
-                            CDProto.send_msg(self.sock, msg)
+                else: 
+                    if self.sou_boss:
+                        if(self.falecido in self.info_slaves):
+                            self.info_slaves.remove(self.falecido)
+                        for elem in self.info_slaves:
+                            if elem != self.falecido:
+                                msg = CDProto.update(self._id, elem, 2, self.proxPass+1)
+                                CDProto.send_msg(self.sock, msg)
                 self.info_testados.pop(self.falecido)
         
             
 
         def dofunc(self):
-                print("entrei no dofunc")
+                #print("entrei no dofunc")
                 #self.send_msg_server(self.sock2,'root',self.tabela[self.proxPass])#mandar o self.tabela[proxPass] para a main
                 #solved=self.read2(self.sock2, '255.255.255.0')
                 solved=False
@@ -286,10 +290,7 @@ class Slave:
                             self.ttl = 0
                             self.check()
                         if(self.proxPass+self.numSlaves>len(self.tabela)): #chegamos ao fim da lista
-                                self.proxPass=-1 #vamos percorrer um a um
-                                self.numSlaves=1
-                        
-
+                                self.proxPass=self.proxPass+self.numSlaves-len(self.tabela) #vamos percorrer um a um
                         print(self.proxPass)
                         self.proxPass=self.proxPass+self.numSlaves
                         
