@@ -259,6 +259,7 @@ class Slave:
                     time.sleep(5)
                 else: 
                     if self.sou_boss:
+                        self.numSlaves=self.numSlaves-1
                         if(self.falecido in self.info_slaves):
                             self.info_slaves.remove(self.falecido)
                         for elem in self.info_slaves:
@@ -292,6 +293,7 @@ class Slave:
                         if(self.proxPass+self.numSlaves>len(self.tabela)): #chegamos ao fim da lista
                                 self.proxPass=self.proxPass+self.numSlaves-len(self.tabela) #vamos percorrer um a um
                         print(self.proxPass)
+                        print(self.numSlaves)
                         self.proxPass=self.proxPass+self.numSlaves
                         
                 time.sleep(1)
@@ -303,6 +305,7 @@ class Slave:
                 if(data!=None):
                         comm=data['type']
                         if comm=="register":
+                                self.info_testados[data['id']] = (0, time.time())
                                 if (self.sou_boss and data['id'] != self._id) :
                                     if (self.numSlaves == 3):
                                         msg = CDProto.bye(data['id'])
