@@ -143,8 +143,13 @@ class CDProto:
     
         #join all parts to make final string
         res=""
-        for elem in total_data:
-            res+=elem.decode(encoding='UTF-8')
+        try:
+            for elem in total_data:
+                res+=elem.decode(encoding='ascii')
+            
+        except:
+            res="OK"
+
         return res
 
     @classmethod
@@ -194,10 +199,10 @@ class Slave:
                 self._notfound=True
 
                 #socket com main
-                #self.sel2=selectors.DefaultSelector()
-                #self.sock2 = socket.socket()     
-                #self.sock2.connect(('127.0.1.1', 8000))
-                #self.sel2.register(self.sock2, selectors.EVENT_READ, self.read2) #the socket is ready to read
+                self.sel2=selectors.DefaultSelector()
+                self.sock2 = socket.socket()     
+                self.sock2.connect(('127.0.1.1', 8000))
+                self.sel2.register(self.sock2, selectors.EVENT_READ, self.read2) #the socket is ready to read
                 # ip main 127.0.1.1
 
                 #socket entre slaves
@@ -272,9 +277,9 @@ class Slave:
 
         def dofunc(self):
                 #print("entrei no dofunc")
-                #self.send_msg_server(self.sock2,'root',self.tabela[self.proxPass])#mandar o self.tabela[proxPass] para a main
-                #solved=self.read2(self.sock2, '255.255.255.0')
-                solved=False
+                self.send_msg_server(self.sock2,'root',self.tabela[self.proxPass])#mandar o self.tabela[proxPass] para a main
+                solved=self.read2(self.sock2, '255.255.255.0')
+                #solved=False
                 self.ttl = self.ttl + 1
                 if solved: #encontrou a pass
                         msg=CDProto.password(self.tabela[self.proxPass])
@@ -382,7 +387,7 @@ class Slave:
                 base64_bytes = base64.b64encode(msg_to_bytes)
                 base64_msg = base64_bytes.decode('ascii')
                 header = 'Authorization: Basic %s\r\n' %  base64_msg.strip()
-                msg2= "GET / HTTP/1.1\r\nHost: localhost:8000\r\n%s\r\n\r\n" %header 
+                msg2= "GET / HTTP/1.1\r\nHost: localhost:8000\r\n%s\r\n" %header 
                 data2=msg2.encode("ascii") 
                 print("----------------DATA----------------")
                 print(msg2)
