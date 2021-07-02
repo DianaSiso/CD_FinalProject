@@ -158,7 +158,7 @@ class CDProto:
         data=msg.__str__().encode(encoding='UTF-8') #dar encode para bytes
         # print("size e data original")
         # print(len(data))
-        print(data)
+        #print(data)
         connection.sendto(data, ('224.1.1.2', 5005))  
 
     @classmethod
@@ -180,7 +180,7 @@ class CDProto:
                     # print("li msg")
                     datat=message.decode(encoding='UTF-8')#descodificamos a mensagem
                     #print(head)
-                    print(datat)
+                    #print(datat)
                     data=json.loads(datat) # vira json
                     return data  
                 else:
@@ -211,6 +211,7 @@ class Slave:
                 self.id_boss = -1
                 self.info_slaves = []
                 self.ttl = 0
+                self.ttry = 0
                 self.info_testados = {}
                 self.sel=selectors.DefaultSelector()
                 MCAST_GRP = '224.1.1.2' 
@@ -236,16 +237,18 @@ class Slave:
                 time.sleep(5)
                 
         def check(self):
-            #print("entrei no check")
-            #print(self.numSlaves)
+            print("entrei no check")
+            print("o meu id é: ")
+            print(self._id)
             self.falecido = -1
-            #print(self.info_testados)
             for elem in self.info_testados:
-                if ((time.time() - self.info_testados[elem][1]) > 5 and self.info_testados[elem][0]!=self._id):
+                if ((time.time() - self.info_testados[elem][1]) > 30 and elem != self._id):
                     self.falecido = elem
 
             
             if (self.falecido != -1):
+                print(self.falecido)
+                print("faleceu alguem")
                 self.proxPass=100
                 for elem in self.info_testados:
                     if (self.falecido != -1):
@@ -281,6 +284,7 @@ class Slave:
                 solved=self.read2(self.sock2, '255.255.255.0')
                 #solved=False
                 self.ttl = self.ttl + 1
+                self.ttry = self.ttry + 1
                 if solved: #encontrou a pass
                         msg=CDProto.password(self.tabela[self.proxPass])
                         CDProto.send_msg(self.sock,msg)
@@ -289,15 +293,21 @@ class Slave:
                         self.sock2.close()
                 else:
                         # print("entrei no else")
-                        if (self.ttl == 5):
+                        if (self.ttry == 9):
+                            self.ttry = 0
+                            time.sleep(1)
+                        if (self.ttl == 9):
                             msg = CDProto.try2(self._id, self.proxPass)
+                            print(msg)
                             CDProto.send_msg(self.sock, msg)
+                        if (self.ttl == 10):
                             self.ttl = 0
+                            print(self.info_testados)
                             self.check()
                         if(self.proxPass+self.numSlaves>len(self.tabela)): #chegamos ao fim da lista
                                 self.proxPass=self.proxPass+self.numSlaves-len(self.tabela) #vamos percorrer um a um
-                        print(self.proxPass)
-                        print(self.numSlaves)
+                        # print(self.proxPass)
+                        # print(self.numSlaves)
                         self.proxPass=self.proxPass+self.numSlaves
                         
                 time.sleep(1)
@@ -354,11 +364,12 @@ class Slave:
                                 if (data['id'] == self._id):
                                     exit()
                         elif comm=='try':
+                            if (data['id'] != self._id):
                                 if data['id'] in self.info_testados:
                                     if self.info_testados[data['id']][0] < data['psw']:
-                                        self.info_testados[data['id']] = (data['psw'], data['time'])
+                                        self.info_testados[data['id']] = (data['psw'], time.time())
                                 else:
-                                    self.info_testados[data['id']] = (data['psw'], data['time'])
+                                    self.info_testados[data['id']] = (data['psw'], time.time())
                                 
                                
 
@@ -369,11 +380,11 @@ class Slave:
                 conn.setblocking(False)
                 #conn.recv(1)
                 data = CDProto.recv_msg_server(conn)
-                print(data)
+                #print(data)
                 if "OK" in data:
-                        print("true")
+                        #print("true")
                         return True
-                print("false")       
+                #print("false")       
                 return False
                     
         
@@ -381,6 +392,7 @@ class Slave:
         def send_msg_server(cls, connection: socket, username: str, password: str):
                 """Sends through a connection a Message object."""
                 msg = username + ":" + password
+                print("ESTOU A TENTAR A PASS: ")
                 print(password)
                 msg_to_bytes = msg.encode("ascii")
                 base64_bytes = base64.b64encode(msg_to_bytes)
@@ -388,8 +400,8 @@ class Slave:
                 header = 'Authorization: Basic %s\r\n' %  base64_msg.strip()
                 msg2= "GET / HTTP/1.1\r\nHost: localhost:8000\r\n%s\r\n" %header 
                 data2=msg2.encode("ascii") 
-                print("----------------DATA----------------")
-                print(msg2)
+                # print("----------------DATA----------------")
+                # print(msg2)
                 connection.send(data2)
 
 
