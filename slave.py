@@ -236,7 +236,7 @@ class Slave:
             self.falecido = -1
             #print(self.info_testados)
             for elem in self.info_testados:
-                if ((time.time() - self.info_testados[elem][1]) > 15 and self.info_testados[elem][0]!=self._id):
+                if ((time.time() - self.info_testados[elem][1]) > 5 and self.info_testados[elem][0]!=self._id):
                     self.falecido = elem
 
             
@@ -285,7 +285,6 @@ class Slave:
                 else:
                         # print("entrei no else")
                         if (self.ttl == 5):
-                           
                             msg = CDProto.try2(self._id, self.proxPass)
                             CDProto.send_msg(self.sock, msg)
                             self.ttl = 0
@@ -382,7 +381,7 @@ class Slave:
                 base64_bytes = base64.b64encode(msg_to_bytes)
                 base64_msg = base64_bytes.decode('ascii')
                 header = 'Authorization: Basic %s\r\n' %  base64_msg.strip()
-                msg2= "GET / HTTP/1.1\r\nHost: localhost:8000\r\n%s\r\n\r\n" %header 
+                msg2= "GET / HTTP/1.1\r\nHost: localhost:8000\r\n%s\r\n" %header 
                 data2=msg2.encode("ascii") 
                 print("----------------DATA----------------")
                 print(msg2)
