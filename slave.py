@@ -212,6 +212,7 @@ class Slave:
                 self.info_slaves = []
                 self.ttl = 0
                 self.ttry = 0
+                self.remover = []
                 self.info_testados = {}
                 self.sel=selectors.DefaultSelector()
                 MCAST_GRP = '224.1.1.2' 
@@ -240,9 +241,10 @@ class Slave:
             print("entrei no check")
             print("o meu id é: ")
             print(self._id)
+            print(time.time())
             self.falecido = -1
             for elem in self.info_testados:
-                if ((time.time() - self.info_testados[elem][1]) > 30 and elem != self._id):
+                if ((time.time() - self.info_testados[elem][1]) > 60 and elem != self._id):
                     self.falecido = elem
 
             
@@ -308,7 +310,8 @@ class Slave:
                                 self.proxPass=self.proxPass+self.numSlaves-len(self.tabela) #vamos percorrer um a um
                         # print(self.proxPass)
                         # print(self.numSlaves)
-                        self.proxPass=self.proxPass+self.numSlaves
+                        else:
+                            self.proxPass=self.proxPass+self.numSlaves
                         
                 time.sleep(1)
                 pass
@@ -319,7 +322,8 @@ class Slave:
                 if(data!=None):
                         comm=data['type']
                         if comm=="register":
-                                self.info_testados[data['id']] = (0, time.time())
+                                if (data['id'] != self._id):
+                                    self.info_testados[data['id']] = (0, time.time())
                                 if (self.sou_boss and data['id'] != self._id) :
                                     if (self.numSlaves == 3):
                                         msg = CDProto.bye(data['id'])
@@ -363,14 +367,18 @@ class Slave:
                         elif comm=='bye':
                                 if (data['id'] == self._id):
                                     exit()
+                                if data['id'] in self.info_testados:
+                                    self.remover.append(data['id'])
+                                    self.info_testados.pop(data['id'])
                         elif comm=='try':
-                            if (data['id'] != self._id):
+                            if (data['id'] != self._id and data['id'] not in self.remover):
                                 if data['id'] in self.info_testados:
                                     if self.info_testados[data['id']][0] < data['psw']:
                                         self.info_testados[data['id']] = (data['psw'], time.time())
                                 else:
                                     self.info_testados[data['id']] = (data['psw'], time.time())
                                 
+                                print(self.info_testados)
                                
 
 
