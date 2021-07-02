@@ -7,6 +7,9 @@ import json
 import time
 from socket import error as SocketError
 import random
+from itertools import product
+from server.const import PASSWORD_SIZE
+
 class Message:
     """Message Type."""
     def __init__(self, id, numSlaves, proxPass, type, psw = None):
@@ -49,14 +52,6 @@ class BossMessage(Message):
     def __str__(self):
         return json.dumps({'type':self.type, 'numSlaves': self.numSlaves, 'boss' : self.id, 'to' : self.to1, 'proxPass' : self.proxPass, 'time': self.time2})
 
-
-class PeriodicMessage(Message):
-    #mensagem enviada para o slave por outros slaves que já existam
-    def __init__(self,id, numSlaves,type="periodic"):
-        super().__init__(id, numSlaves, 0, type)
-    def __str__(self):
-        return json.dumps({'type':self.type, 'id' : self.id})
-
 class ByeMessage(Message):
     #mensagem enviada para o slave por outros slaves que já existam
     def __init__(self, id, type="bye"):
@@ -93,11 +88,7 @@ class CDProto:
     @classmethod
     def boss(cls, id: int, to1: int,  numSlaves : int, proxPass : int, time2 : float) -> BossMessage:
         return BossMessage(id, to1, numSlaves, proxPass, time2)
-    
-    @classmethod
-    def periodic(cls, id: int) -> PeriodicMessage:
-        return PeriodicMessage(id)
-
+   
     @classmethod
     def bye(cls, id : int) -> ByeMessage:
         return ByeMessage(id)
@@ -195,7 +186,8 @@ class Slave:
                 self.multicast_group = ('224.1.1.2', 3)
                 self.numSlaves = 1
                 self.proxPass = 0
-                self.tabela = string.ascii_uppercase + string.ascii_lowercase + string.digits
+                self.tempTabela = string.ascii_uppercase + string.ascii_lowercase + string.digits
+                self.tabela = [''.join(str(i) for i in x) for x in product(self.Convert(self.tempTabela), repeat=PASSWORD_SIZE)]
                 self._notfound=True
 
                 #socket com main
@@ -207,6 +199,7 @@ class Slave:
 
                 #socket entre slaves
                 self.sou_boss = True
+                self.tempoInicio = time.time()
                 self.time_boss = time.time() + 10000
                 self.id_boss = -1
                 self.info_slaves = []
@@ -236,12 +229,14 @@ class Slave:
                 msg = CDProto.register(self._id,self.numSlaves, self.proxPass)
                 CDProto.send_msg(self.sock, msg)
                 time.sleep(5)
-                
+
+        def Convert(self, string):
+            list1=[]
+            list1[:0]=string
+            return list1
+
         def check(self):
-            print("entrei no check")
-            print("o meu id é: ")
-            print(self._id)
-            print(time.time())
+           
             self.falecido = -1
             for elem in self.info_testados:
                 if ((time.time() - self.info_testados[elem][1]) > 60 and elem != self._id):
@@ -249,16 +244,13 @@ class Slave:
 
             
             if (self.falecido != -1):
-                print(self.falecido)
-                print("faleceu alguem")
+                
                 self.proxPass=100
                 for elem in self.info_testados:
                     if (self.falecido != -1):
                         if (self.proxPass > self.info_testados[elem][0]):
                             self.proxPass = self.info_testados[elem][0]
-                #print(self.falecido)
-                #print("MORREU")
-                #print(self.proxPass)
+                
                 if self.falecido == self.id_boss:
                     self.info_slaves = []
                     self.sou_boss = True
@@ -281,10 +273,10 @@ class Slave:
             
 
         def dofunc(self):
-                #print("entrei no dofunc")
+                
                 self.send_msg_server(self.sock2,'root',self.tabela[self.proxPass])#mandar o self.tabela[proxPass] para a main
                 solved=self.read2(self.sock2, '255.255.255.0')
-                #solved=False
+                
                 self.ttl = self.ttl + 1
                 self.ttry = self.ttry + 1
                 if solved: #encontrou a pass
@@ -294,30 +286,28 @@ class Slave:
                         self.sock.close()
                         self.sock2.close()
                 else:
-                        # print("entrei no else")
+                       
                         if (self.ttry == 9):
                             self.ttry = 0
-                            time.sleep(1)
+                            time.sleep(1)   #pra n ficar banido
                         if (self.ttl == 9):
                             msg = CDProto.try2(self._id, self.proxPass)
-                            print(msg)
+                            
                             CDProto.send_msg(self.sock, msg)
                         if (self.ttl == 10):
                             self.ttl = 0
-                            print(self.info_testados)
+                           
                             self.check()
                         if(self.proxPass+self.numSlaves>len(self.tabela)): #chegamos ao fim da lista
                                 self.proxPass=self.proxPass+self.numSlaves-len(self.tabela) #vamos percorrer um a um
-                        # print(self.proxPass)
-                        # print(self.numSlaves)
+                       
                         else:
                             self.proxPass=self.proxPass+self.numSlaves
                         
-                time.sleep(1)
                 pass
       
         def read(self,conn, mask):
-                # print("-----------------read")
+               
                 data = CDProto.recv_msg(conn)  #the server reads the message sent through the socket
                 if(data!=None):
                         comm=data['type']
@@ -345,20 +335,20 @@ class Slave:
                                    self.proxPass = data['proxPass']
                         elif comm=='correct':
                                 self._notfound=False
+                                self.timeFinal = time.time()
+                                print(self.timeFinal - self.tempoInicio)
                                 conn.close()
                         elif comm=='boss':
                                 if data['to'] == self._id:
                                     if (self.numSlaves < data['numSlaves']):
-                                        print("afinal eu nao sou o boss")
-                                        print(self._id)
+                                       
                                         self.id_boss = data['boss']
                                         self.time_boss = data['time']
                                         self.sou_boss = False
                                         self.numSlaves = data['numSlaves']
                                         self.proxPass = data['proxPass']
                                     elif (self.time_boss > data['time']):
-                                        print("afinal eu nao sou o boss")
-                                        print(self._id)
+                                       
                                         self.id_boss = data['boss']
                                         self.time_boss = data['time']
                                         self.sou_boss = False
@@ -378,7 +368,7 @@ class Slave:
                                 else:
                                     self.info_testados[data['id']] = (data['psw'], time.time())
                                 
-                                print(self.info_testados)
+                               
                                
 
 
@@ -390,7 +380,7 @@ class Slave:
                 data = CDProto.recv_msg_server(conn)
                 #print(data)
                 if "OK" in data:
-                        #print("true")
+                        print("ENCONTREI")
                         return True
                 #print("false")       
                 return False
@@ -400,16 +390,15 @@ class Slave:
         def send_msg_server(cls, connection: socket, username: str, password: str):
                 """Sends through a connection a Message object."""
                 msg = username + ":" + password
-                print("ESTOU A TENTAR A PASS: ")
-                print(password)
+                # print("ESTOU A TENTAR A PASS: ")
+                # print(password)
                 msg_to_bytes = msg.encode("ascii")
                 base64_bytes = base64.b64encode(msg_to_bytes)
                 base64_msg = base64_bytes.decode('ascii')
                 header = 'Authorization: Basic %s\r\n' %  base64_msg.strip()
                 msg2= "GET / HTTP/1.1\r\nHost: localhost:8000\r\n%s\r\n" %header 
                 data2=msg2.encode("ascii") 
-                # print("----------------DATA----------------")
-                # print(msg2)
+               
                 connection.send(data2)
 
 

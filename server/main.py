@@ -110,8 +110,6 @@ def authenticate(
     
     correct_username = secrets.compare_digest(credentials.username, "root")
     correct_password = secrets.compare_digest(credentials.password, PASSWORD)
-    print(correct_password)
-    print(correct_username)
     if not (correct_username and correct_password):
         time.sleep(random.randint(MIN_VALIDATE, MAX_VALIDATE) / 1000)
         raise HTTPException(
