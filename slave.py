@@ -241,7 +241,7 @@ class Slave:
             self.falecido = -1
             #print(self.info_testados)
             for elem in self.info_testados:
-                if ((time.time() - self.info_testados[elem][1]) > 15 and self.info_testados[elem][0]!=self._id):
+                if ((time.time() - self.info_testados[elem][1]) > 5 and self.info_testados[elem][0]!=self._id):
                     self.falecido = elem
 
             
@@ -290,7 +290,6 @@ class Slave:
                 else:
                         # print("entrei no else")
                         if (self.ttl == 5):
-                           
                             msg = CDProto.try2(self._id, self.proxPass)
                             CDProto.send_msg(self.sock, msg)
                             self.ttl = 0
